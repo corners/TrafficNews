@@ -4,6 +4,31 @@ require 'net/http'
 require 'uri'
 require 'hpricot'
 require 'open-uri'
+require 'time'
+require 'date'
+
+def remove_markup(html)
+  	html.sub(%r{<body.*?>(.*?)</body>}mi, '\1').gsub(/<.*?>/m, ' ').gsub(%r{(\n\s*){2}}, "\n\n")
+end
+
+def remove_extra_whitespace(text)
+  text.gsub(/\s+/, ' ')
+end
+
+def relative_date(date)
+  date = Date.parse(date, true) unless /Date.*/ =~ date.class.to_s
+  days = (date - Date.today).to_i
+  
+  return 'today'     if days >= 0 and days < 1
+  return 'tomorrow'  if days >= 1 and days < 2
+  return 'yesterday' if days >= -1 and days < 0
+  
+  return "in #{days} days"      if days.abs < 60 and days > 0
+  return "#{days.abs} days ago" if days.abs < 60 and days < 0
+  
+  return date.strftime('%A, %B %e') if days.abs < 182
+  return date.strftime('%A, %B %e, %Y')
+end
 
 class TrafficDatum
   attr_accessor :Location
@@ -14,14 +39,6 @@ end
 class Route
   attr_accessor :Name
   attr_accessor :Roads
-end
-
-def remove_markup(html)
-  	html.sub(%r{<body.*?>(.*?)</body>}mi, '\1').gsub(/<.*?>/m, ' ').gsub(%r{(\n\s*){2}}, "\n\n")
-end
-
-def remove_extra_whitespace(text)
-  text.gsub(/\s+/, ' ')
 end
 
 class BBCBerkshireTrafficSource
@@ -45,8 +62,8 @@ class BBCBerkshireTrafficSource
         cols = row.search("td")
         if cols[1] != nil || cols[2] != nil
           data = TrafficDatum.new
-          data.Location = remove_extra_whitespace(cols[1].inner_text)
-          data.Report = remove_extra_whitespace(cols[2].inner_text)
+          data.Location = remove_extra_whitespace(cols[1].inner_text).strip
+          data.Report = remove_extra_whitespace(cols[2].inner_text).strip
           data.LastUpdated = extract_last_updated(data.Report)
           traffic_data << data
         end
@@ -77,7 +94,14 @@ end
 def arborfield_route()
   route = Route.new
   route.Name = "via Arborfield"
-  route.Roads = ["CHURCH ROAD", "A327", "SCHOOL ROAD", "BARKHAM ROAD", "MOLLY MILLAR", "OAKLANDS DRIVE"]
+  route.Roads = ["CHURCH ROAD", "A327", "SCHOOL ROAD", "BARKHAM ROAD", "MOLLY MILLAR", "FISHPONDS", "OAKLANDS DRIVE"]
+  route
+end
+
+def winnersh_route()
+  route = Route.new
+  route.Name = "via Winnersh"
+  route.Roads = ["FISHPONDS", "OXFORD ROAD", "READING ROAD", "A329", "LOWER EARLEY WAY", "B3270", "SHINFIELD ROAD", "A327"]
   route
 end
 
@@ -99,14 +123,17 @@ traffic_sources().each do |source|
     relevant = reports.select {|report| route.Roads.any? {|road| report.Location.upcase.include?(road)}}
     relevant = relevant.sort_by { |report| report.LastUpdated }.reverse
     
-    # Display relevant reports
-    relevant.each do |routeReport|
-      # TODO change last updated to x days | y hours | z minutes ago
-      
-      puts "Updated: #{routeReport.LastUpdated.strftime('%Y-%m-%d %H:%M')}\n"
-      puts "Location: #{routeReport.Location}"
-      puts "Report: #{routeReport.Report}\n\n"
-    end
+	if relevant.any?
+		# Display relevant reports
+		relevant.each do |routeReport|
+		  puts "Last updated #{relative_date(routeReport.LastUpdated)}\n"
+		  puts "Location\n#{routeReport.Location}"
+		  puts "Report\n#{routeReport.Report}\n\n"
+		end
+	else
+		puts "No known issues\n\n"
+	end
+	puts "\n"
   end
 
 end
