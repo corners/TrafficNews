@@ -53,7 +53,6 @@ class BBCBerkshireTrafficSource
   end
   
   def get_road_information()
-    
     doc = Hpricot(open(url()))
 
     traffic_data = Array.new
@@ -80,7 +79,6 @@ class BBCBerkshireTrafficSource
         detail = summary.at("div[@class='item-details']/p")
         if detail != nil
           data.Report = detail.inner_text
-
           traffic_data << data
         end
       end
@@ -101,7 +99,7 @@ class BBCBerkshireTrafficSource
     # end
     # result
   # end
-# end
+end
 
 def traffic_sources()
   [ BBCBerkshireTrafficSource.new ]
@@ -138,36 +136,32 @@ traffic_sources().each do |source|
   end
   
   if show_reports
-	puts "Reports"
+    puts "Reports"
 	  reports.each do |report|
-		puts report.LastUpdated, report.Location, report.Report, "\n"
-	  end
+      puts report.LastUpdated, report.Location, report.Report, "\n"
+    end
   end
 
   if show_relevant
 	  # Check each route for problems
 	  routes().each do |route|
-		puts "Route: #{route.Name}\n\n"
+      puts "Route: #{route.Name}\n\n"
 
-		# Find data relevant to this route
-		relevant = reports.select {|report| route.Roads.any? {|road| report.Location.upcase.include?(road)}}
-		relevant = relevant.sort_by { |report| report.LastUpdated }.reverse
-		
-		if relevant.any?
-			# Display relevant reports
-			relevant.each do |routeReport|
-			  puts "Last updated #{relative_date(routeReport.LastUpdated)}\n"
-			  puts "Location\n#{routeReport.Location}"
-			  puts "Report\n#{routeReport.Report}\n\n"
-			end
-		else
-			puts "No known issues\n\n"
-		end
-		puts "\n"
-	  end
+      # Find data relevant to this route
+      relevant = reports.select {|report| route.Roads.any? {|road| report.Location.upcase.include?(road)}}
+      relevant = relevant.sort_by { |report| report.LastUpdated }.reverse
+      
+      if relevant.any?
+        # Display relevant reports
+        relevant.each do |routeReport|
+          puts "Last updated #{relative_date(routeReport.LastUpdated)}\n"
+          puts "Location\n#{routeReport.Location}"
+          puts "Report\n#{routeReport.Report}\n\n"
+        end
+      else
+        puts "No known issues\n\n"
+      end
+      puts "\n"
+    end
   end
-
 end
-
-
-
