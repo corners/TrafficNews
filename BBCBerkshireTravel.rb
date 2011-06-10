@@ -7,13 +7,13 @@ require 'open-uri'
 require 'time'
 require 'date'
 
-def remove_markup(html)
-  	html.sub(%r{<body.*?>(.*?)</body>}mi, '\1').gsub(/<.*?>/m, ' ').gsub(%r{(\n\s*){2}}, "\n\n")
-end
+# def remove_markup(html)
+  	# html.sub(%r{<body.*?>(.*?)</body>}mi, '\1').gsub(/<.*?>/m, ' ').gsub(%r{(\n\s*){2}}, "\n\n")
+# end
 
-def remove_extra_whitespace(text)
-  text.gsub(/\s+/, ' ')
-end
+# def remove_extra_whitespace(text)
+  # text.gsub(/\s+/, ' ')
+# end
 
 def relative_date(date)
   date = Date.parse(date, true) unless /Date.*/ =~ date.class.to_s
@@ -48,7 +48,8 @@ class BBCBerkshireTrafficSource
   
   def url()
     "http://www.bbc.co.uk/berkshire/travel/road_info_ssi_feature.shtml"
-    #"./BBCBerkshireTravel.html"
+    #"./BBCBerkshireTravel.html" # old style
+    #"./BBCBerkshireTravel2.html"
   end
   
   def get_road_information()
@@ -57,14 +58,29 @@ class BBCBerkshireTrafficSource
 
     traffic_data = Array.new
 
-    doc.search("table[@class='tpegTable']").each do |table|
-      table.search("tr").each do |row|
-        cols = row.search("td")
-        if cols[1] != nil || cols[2] != nil
-          data = TrafficDatum.new
-          data.Location = remove_extra_whitespace(cols[1].inner_text).strip
-          data.Report = remove_extra_whitespace(cols[2].inner_text).strip
-          data.LastUpdated = extract_last_updated(data.Report)
+    doc.search("div[@class='item-body']").each do |summary|
+      data = TrafficDatum.new
+
+      # detail
+      road = summary.at("div[@class='item-summary']/div[@class]")
+      if road != nil
+        road_type_code = road.get_attribute("class")
+        case road_type_code
+          when "road-motorway"
+            road_type = "motorway"
+          when "road-a"
+            road_type = "a road"
+          else
+            road_type = "road"
+        end
+        road = road.at("span")
+        data.Location = road.inner_text
+        
+        # summary
+        detail = summary.at("div[@class='item-details']/p")
+        if detail != nil
+          data.Report = detail.inner_text
+
           traffic_data << data
         end
       end
@@ -72,20 +88,20 @@ class BBCBerkshireTrafficSource
     traffic_data
   end
   
-  def extract_last_updated(report)
-    # Text in format: Last updated: 1st January 2010 12:51
-	  matches = report.scan(/Last updated\: (\d+)(th|st|nd) ([a-zA-Z]+) (\d{4}) at (\d+)\:(\d+)/)
-    match = matches[0]
-    if match != nil
-      # Convert to a parsable format
-  	  str = "#{match[0]} #{match[2]} #{match[3]} #{match[4]}:#{match[5]}:00"
-      result = DateTime.parse(str)
-    else
-      result = DateTime.now    
-    end
-    result
-  end
-end
+  # def extract_last_updated(report)
+    # # Text in format: Last updated: 1st January 2010 12:51
+	  # matches = report.scan(/Last updated\: (\d+)(th|st|nd) ([a-zA-Z]+) (\d{4}) at (\d+)\:(\d+)/)
+    # match = matches[0]
+    # if match != nil
+      # # Convert to a parsable format
+  	  # str = "#{match[0]} #{match[2]} #{match[3]} #{match[4]}:#{match[5]}:00"
+      # result = DateTime.parse(str)
+    # else
+      # result = DateTime.now    
+    # end
+    # result
+  # end
+# end
 
 def traffic_sources()
   [ BBCBerkshireTrafficSource.new ]
@@ -109,31 +125,46 @@ def routes()
   [ arborfield_route ]
 end
 
+show_reports = false
+show_relevant = true
+
 traffic_sources().each do |source|
   puts "Source: #{source.name}\n\n"
   
   # Get traffic news
   reports = source.get_road_information
+  if reports.length == 0
+    puts "No reports"
+  end
+  
+  if show_reports
+	puts "Reports"
+	  reports.each do |report|
+		puts report.LastUpdated, report.Location, report.Report, "\n"
+	  end
+  end
 
-  # Check each route for problems
-  routes().each do |route|
-    puts "Route: #{route.Name}\n\n"
+  if show_relevant
+	  # Check each route for problems
+	  routes().each do |route|
+		puts "Route: #{route.Name}\n\n"
 
-    # Find data relevant to this route
-    relevant = reports.select {|report| route.Roads.any? {|road| report.Location.upcase.include?(road)}}
-    relevant = relevant.sort_by { |report| report.LastUpdated }.reverse
-    
-	if relevant.any?
-		# Display relevant reports
-		relevant.each do |routeReport|
-		  puts "Last updated #{relative_date(routeReport.LastUpdated)}\n"
-		  puts "Location\n#{routeReport.Location}"
-		  puts "Report\n#{routeReport.Report}\n\n"
+		# Find data relevant to this route
+		relevant = reports.select {|report| route.Roads.any? {|road| report.Location.upcase.include?(road)}}
+		relevant = relevant.sort_by { |report| report.LastUpdated }.reverse
+		
+		if relevant.any?
+			# Display relevant reports
+			relevant.each do |routeReport|
+			  puts "Last updated #{relative_date(routeReport.LastUpdated)}\n"
+			  puts "Location\n#{routeReport.Location}"
+			  puts "Report\n#{routeReport.Report}\n\n"
+			end
+		else
+			puts "No known issues\n\n"
 		end
-	else
-		puts "No known issues\n\n"
-	end
-	puts "\n"
+		puts "\n"
+	  end
   end
 
 end
