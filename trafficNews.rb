@@ -109,9 +109,7 @@ traffic_sources().each do |source|
   
   # Get traffic news
   reports = source.get_road_information
-  if reports.length == 0
-    puts "No reports"
-  end
+  puts "Downloaded #{reports.length} reports\n"
   
   if show_reports
     puts "Reports"
